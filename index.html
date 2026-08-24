@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Universal Downloader - Yorlxx Dev</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .loader-bar { width: 100%; height: 4px; background: #1e293b; overflow: hidden; border-radius: 2px; }
+    .loader-bar::after { content: ''; display: block; width: 40%; height: 100%; background: #6366f1; animation: load 1s infinite ease-in-out; }
+    @keyframes load { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between items-center p-4">
+
+  <!-- Header -->
+  <header class="text-center mt-8 mb-6">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-bold mb-4 uppercase tracking-widest">
+      <i class="fa-solid fa-server"></i> Arquitectura Híbrida
+    </div>
+    <h1 class="text-4xl sm:text-5xl font-black bg-clip-text text-transparent bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500">
+      Social Downloader
+    </h1>
+  </header>
+
+  <!-- Main Container -->
+  <main class="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl my-auto">
+    
+    <div class="flex justify-center gap-6 mb-6 text-slate-500">
+      <i class="fa-brands fa-tiktok text-2xl hover:text-pink-500 transition-colors"></i>
+      <i class="fa-brands fa-facebook text-2xl hover:text-blue-500 transition-colors"></i>
+      <i class="fa-brands fa-instagram text-2xl hover:text-purple-500 transition-colors"></i>
+    </div>
+
+    <!-- Input Box -->
+    <div class="mb-8">
+      <label class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Enlace del Video</label>
+      <div class="relative flex items-center bg-slate-950 border border-slate-800 rounded-2xl focus-within:border-indigo-500 transition-all shadow-inner">
+        <input type="text" id="urlInput" placeholder="Pega el link aquí..." class="w-full bg-transparent py-4 pl-4 pr-20 text-sm focus:outline-none text-slate-200">
+        <div class="absolute right-2 flex items-center gap-1">
+          <button onclick="pasteClipboard()" class="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors" title="Pegar"><i class="fa-regular fa-clipboard"></i></button>
+          <button onclick="clearInput()" class="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-xl transition-colors" title="Borrar"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quality Options -->
+    <div class="space-y-4">
+      <p class="text-xs font-bold text-slate-400 uppercase tracking-widest text-center">Selecciona Formato</p>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <button onclick="startDownload('1080')" class="bg-slate-800 hover:bg-indigo-600 border border-slate-700 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all active:scale-95">
+          <i class="fa-solid fa-film text-2xl text-indigo-400"></i>
+          <span class="text-sm font-bold">Video HD</span>
+        </button>
+
+        <button onclick="startDownload('480')" class="bg-slate-800 hover:bg-blue-600 border border-slate-700 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all active:scale-95">
+          <i class="fa-solid fa-mobile-screen text-2xl text-blue-400"></i>
+          <span class="text-sm font-bold">Normal</span>
+        </button>
+
+        <button onclick="startDownload('audio')" class="bg-slate-800 hover:bg-emerald-600 border border-slate-700 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all active:scale-95">
+          <i class="fa-solid fa-music text-2xl text-emerald-400"></i>
+          <span class="text-sm font-bold">Solo Audio</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Status Area -->
+    <div id="statusContainer" class="hidden mt-6">
+      <div class="loader-bar mb-3" id="loaderBar"></div>
+      <div id="statusText" class="text-center text-sm font-medium text-slate-300"></div>
+    </div>
+
+  </main>
+
+  <footer class="text-center py-6">
+    <p class="text-xs tracking-widest text-slate-500 uppercase">
+      Desarrollado con precisión por <span class="font-black text-indigo-400">Yorlxx Dev</span>
+    </p>
+  </footer>
+
+  <script>
+    // ⚠️ REEMPLAZA ESTA URL POR LA TUYA DE RENDER ⚠️
+    const RENDER_API_URL = "https://yorlxx-api-downloader.onrender.com";
+
+    async function pasteClipboard() {
+      try {
+        const text = await navigator.clipboard.readText();
+        document.getElementById('urlInput').value = text.trim();
+      } catch (err) { alert("Pégalo manualmente."); }
+    }
+
+    function clearInput() {
+      document.getElementById('urlInput').value = '';
+      document.getElementById('statusContainer').classList.add('hidden');
+    }
+
+    function updateStatus(message, isError = false, isLoading = false) {
+      const container = document.getElementById('statusContainer');
+      const text = document.getElementById('statusText');
+      const loader = document.getElementById('loaderBar');
+      container.classList.remove('hidden');
+      text.innerHTML = message;
+      text.className = `text-center text-sm font-medium ${isError ? 'text-red-400' : 'text-slate-300'}`;
+      loader.style.display = isLoading ? 'block' : 'none';
+    }
+
+    async function startDownload(quality) {
+      const url = document.getElementById('urlInput').value.trim();
+      if (!url) return updateStatus("⚠️ Ingresa un enlace primero.", true);
+      
+      const isTikTok = url.includes('tiktok.com');
+      let finalUrl = "";
+      const isAudio = quality === 'audio';
+      const fileExtension = isAudio ? 'mp3' : 'mp4';
+
+      try {
+        if (isTikTok) {
+          // ==============================
+          // RUTA TIKTOK (Frontend / TikWM)
+          // ==============================
+          updateStatus("⏳ Procesando TikTok en el navegador...", false, true);
+          const res = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
+          const data = await res.json();
+          if (!data || !data.data) throw new Error("Video no encontrado o privado");
+          
+          if (isAudio) finalUrl = data.data.music;
+          else if (quality === '1080' && data.data.hdplay) finalUrl = data.data.hdplay;
+          else finalUrl = data.data.play;
+
+        } else {
+          // ==============================
+          // RUTA FB/IG (Backend / Render)
+          // ==============================
+          // Mensaje especial informando que Render podría estar despertando
+          updateStatus("⏳ Conectando al servidor... (Si es la primera vez hoy, puede tardar 1 minuto en despertar)", false, true);
+          
+          const response = await fetch(`${RENDER_API_URL}/download`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: url, quality: quality })
+          });
+          
+          const data = await response.json();
+          if (!response.ok || !data.download_url) throw new Error(data.detail || "Video no accesible (podría ser privado).");
+          
+          finalUrl = data.download_url;
+        }
+
+        await forceDownload(finalUrl, `Media_Yorlxx_${Date.now()}.${fileExtension}`);
+
+      } catch (error) {
+        updateStatus(`❌ ${error.message}`, true, false);
+      }
+    }
+
+    // MAGIA PARA DESCARGA DIRECTA (SIN REDIRECCIONAR)
+    async function forceDownload(fileUrl, filename) {
+      updateStatus("✅ Archivo procesado. Iniciando descarga automática...", false, true);
+      
+      try {
+        // Intento 1: Blob (Invisible, la mejor opción)
+        const response = await fetch(fileUrl);
+        if (!response.ok) throw new Error("CORS bloqued Blob");
+        
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(objectUrl);
+        
+        updateStatus("✅ ¡Descarga completada con éxito!", false, false);
+        
+      } catch (e) {
+        // Intento 2 (Fallback): Si FB/IG bloquea el Blob por seguridad CORS, forzamos descarga nativa del navegador
+        const a = document.createElement('a');
+        a.href = fileUrl;
+        a.download = filename;
+        a.target = "_parent"; 
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        updateStatus("✅ ¡Descarga iniciada!", false, false);
+      }
+    }
+  </script>
+</body>
+</html>
