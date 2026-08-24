@@ -10,6 +10,12 @@
     .loader-bar { width: 100%; height: 4px; background: #1e293b; overflow: hidden; border-radius: 2px; }
     .loader-bar::after { content: ''; display: block; width: 40%; height: 100%; background: #6366f1; animation: load 1s infinite ease-in-out; }
     @keyframes load { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+    
+    /* Scrollbar personalizado para la galería */
+    .custom-scroll::-webkit-scrollbar { width: 6px; }
+    .custom-scroll::-webkit-scrollbar-track { background: #0f172a; border-radius: 10px; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    .custom-scroll::-webkit-scrollbar-thumb:hover { background: #475569; }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between items-center p-4">
@@ -35,7 +41,7 @@
 
     <!-- Input Box -->
     <div class="mb-8">
-      <label class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Enlace del Video</label>
+      <label class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Enlace del Video o Fotos</label>
       <div class="relative flex items-center bg-slate-950 border border-slate-800 rounded-2xl focus-within:border-indigo-500 transition-all shadow-inner">
         <input type="text" id="urlInput" placeholder="Pega el link aquí..." class="w-full bg-transparent py-4 pl-4 pr-20 text-sm focus:outline-none text-slate-200">
         <div class="absolute right-2 flex items-center gap-1">
@@ -45,8 +51,8 @@
       </div>
     </div>
 
-    <!-- Quality Options -->
-    <div class="space-y-4">
+    <!-- Opciones Normales (Se ocultan si son fotos) -->
+    <div id="qualityOptions" class="space-y-4">
       <p class="text-xs font-bold text-slate-400 uppercase tracking-widest text-center">Selecciona Formato</p>
       
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -67,6 +73,23 @@
       </div>
     </div>
 
+    <!-- INTERFAZ DE CARRUSEL DE FOTOS (Oculta por defecto) -->
+    <div id="carouselUI" class="hidden space-y-4">
+      <div class="flex justify-between items-center mb-2">
+        <p class="text-xs font-bold text-emerald-400 uppercase tracking-widest"><i class="fa-solid fa-images"></i> Carrusel Detectado</p>
+        <button onclick="resetUI()" class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 py-1.5 px-3 rounded-lg transition-colors">Volver</button>
+      </div>
+      
+      <button onclick="downloadAllImages()" id="btnDownloadAll" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-3 rounded-xl transition flex justify-center items-center gap-2 shadow-lg">
+        <i class="fa-solid fa-download"></i> Descargar Todas (<span id="imgCount">0</span>)
+      </button>
+
+      <!-- Grilla de Imágenes -->
+      <div id="imageGrid" class="grid grid-cols-2 gap-3 max-h-72 overflow-y-auto custom-scroll p-2 bg-slate-950 rounded-xl border border-slate-800">
+        <!-- Las imágenes se insertan aquí con JS -->
+      </div>
+    </div>
+
     <!-- Status Area -->
     <div id="statusContainer" class="hidden mt-6">
       <div class="loader-bar mb-3" id="loaderBar"></div>
@@ -84,6 +107,9 @@
   <script>
     // ⚠️ REEMPLAZA ESTA URL POR LA TUYA DE RENDER ⚠️
     const RENDER_API_URL = "https://yorlxx-api-downloader.onrender.com";
+    
+    // Variable global para almacenar las imágenes detectadas
+    let currentCarouselImages = [];
 
     async function pasteClipboard() {
       try {
@@ -94,6 +120,13 @@
 
     function clearInput() {
       document.getElementById('urlInput').value = '';
+      resetUI(); // Si borra el link, restauramos todo
+    }
+
+    // Vuelve a mostrar los botones normales y oculta la galería
+    function resetUI() {
+      document.getElementById('carouselUI').classList.add('hidden');
+      document.getElementById('qualityOptions').classList.remove('hidden');
       document.getElementById('statusContainer').classList.add('hidden');
     }
 
@@ -107,6 +140,34 @@
       loader.style.display = isLoading ? 'block' : 'none';
     }
 
+    // Muestra la interfaz de galería
+    function buildCarouselUI(images) {
+      currentCarouselImages = images;
+      
+      document.getElementById('qualityOptions').classList.add('hidden');
+      document.getElementById('statusContainer').classList.add('hidden');
+      document.getElementById('carouselUI').classList.remove('hidden');
+      document.getElementById('imgCount').innerText = images.length;
+
+      const grid = document.getElementById('imageGrid');
+      grid.innerHTML = ''; // Limpiamos la grilla anterior
+
+      images.forEach((imgUrl, index) => {
+        const div = document.createElement('div');
+        div.className = 'relative group rounded-lg overflow-hidden border border-slate-700 aspect-[3/4] bg-slate-900';
+        div.innerHTML = `
+          <img src="${imgUrl}" class="w-full h-full object-cover" />
+          <div class="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
+             <button onclick="forceDownload('${imgUrl}', 'Foto_Yorlxx_${index+1}.jpg', true)" class="bg-indigo-600 hover:bg-indigo-500 text-white p-3 rounded-full shadow-lg transform hover:scale-110 transition-all" title="Descargar esta foto">
+               <i class="fa-solid fa-download"></i>
+             </button>
+          </div>
+          <span class="absolute top-2 left-2 bg-slate-950/80 text-xs font-bold px-2 py-1 rounded text-slate-300">${index + 1}</span>
+        `;
+        grid.appendChild(div);
+      });
+    }
+
     async function startDownload(quality) {
       const url = document.getElementById('urlInput').value.trim();
       if (!url) return updateStatus("⚠️ Ingresa un enlace primero.", true);
@@ -118,24 +179,31 @@
 
       try {
         if (isTikTok) {
-          // ==============================
-          // RUTA TIKTOK (Frontend / TikWM)
-          // ==============================
           updateStatus("⏳ Procesando TikTok en el navegador...", false, true);
           const res = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
           const data = await res.json();
           if (!data || !data.data) throw new Error("Video no encontrado o privado");
           
+          // --- DETECCIÓN DE CARRUSEL DE FOTOS ---
+          if (data.data.images && data.data.images.length > 0) {
+            if (isAudio) {
+              // Si solo pidió el audio, ignoramos las fotos y bajamos el mp3
+              await forceDownload(data.data.music, `Audio_Yorlxx_${Date.now()}.mp3`);
+            } else {
+              // Si pidió video, construimos la galería
+              buildCarouselUI(data.data.images);
+            }
+            return; // Terminamos aquí, la galería maneja el resto
+          }
+
+          // Si es un video normal de TikTok
           if (isAudio) finalUrl = data.data.music;
           else if (quality === '1080' && data.data.hdplay) finalUrl = data.data.hdplay;
           else finalUrl = data.data.play;
 
         } else {
-          // ==============================
-          // RUTA FB/IG (Backend / Render)
-          // ==============================
-          // Mensaje especial informando que Render podría estar despertando
-          updateStatus("⏳ Conectando al servidor... (Si es la primera vez hoy, puede tardar 1 minuto en despertar)", false, true);
+          // FB/IG (Backend Render)
+          updateStatus("⏳ Conectando al servidor... (Puede tardar si está inactivo)", false, true);
           
           const response = await fetch(`${RENDER_API_URL}/download`, {
             method: 'POST',
@@ -149,6 +217,7 @@
           finalUrl = data.download_url;
         }
 
+        // Descarga el archivo (Video/Audio)
         await forceDownload(finalUrl, `Media_Yorlxx_${Date.now()}.${fileExtension}`);
 
       } catch (error) {
@@ -156,12 +225,37 @@
       }
     }
 
+    // Función para el botón "Descargar Todas"
+    async function downloadAllImages() {
+      const btn = document.getElementById('btnDownloadAll');
+      const originalText = btn.innerHTML;
+      
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Descargando...';
+      btn.disabled = true;
+      btn.classList.replace('bg-indigo-600', 'bg-slate-600');
+
+      for (let i = 0; i < currentCarouselImages.length; i++) {
+        await forceDownload(currentCarouselImages[i], `Foto_Yorlxx_${i+1}_${Date.now()}.jpg`, true);
+        // Pausa de medio segundo entre fotos para que el navegador no se bloquee ni corte la descarga
+        await new Promise(r => setTimeout(r, 500));
+      }
+
+      btn.innerHTML = '<i class="fa-solid fa-check"></i> ¡Completado!';
+      btn.classList.replace('bg-slate-600', 'bg-emerald-600');
+      
+      setTimeout(() => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        btn.classList.replace('bg-emerald-600', 'bg-indigo-600');
+      }, 3000);
+    }
+
     // MAGIA PARA DESCARGA DIRECTA (SIN REDIRECCIONAR)
-    async function forceDownload(fileUrl, filename) {
-      updateStatus("✅ Archivo procesado. Iniciando descarga automática...", false, true);
+    // Agregué el parámetro "isSilent" para que no sobreescriba los textos de la interfaz cuando bajamos fotos
+    async function forceDownload(fileUrl, filename, isSilent = false) {
+      if (!isSilent) updateStatus("✅ Archivo procesado. Iniciando descarga automática...", false, true);
       
       try {
-        // Intento 1: Blob (Invisible, la mejor opción)
         const response = await fetch(fileUrl);
         if (!response.ok) throw new Error("CORS bloqued Blob");
         
@@ -176,10 +270,9 @@
         document.body.removeChild(a);
         URL.revokeObjectURL(objectUrl);
         
-        updateStatus("✅ ¡Descarga completada con éxito!", false, false);
+        if (!isSilent) updateStatus("✅ ¡Descarga completada con éxito!", false, false);
         
       } catch (e) {
-        // Intento 2 (Fallback): Si FB/IG bloquea el Blob por seguridad CORS, forzamos descarga nativa del navegador
         const a = document.createElement('a');
         a.href = fileUrl;
         a.download = filename;
@@ -188,7 +281,7 @@
         a.click();
         document.body.removeChild(a);
         
-        updateStatus("✅ ¡Descarga iniciada!", false, false);
+        if (!isSilent) updateStatus("✅ ¡Descarga iniciada!", false, false);
       }
     }
   </script>
